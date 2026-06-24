@@ -1,55 +1,80 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import Shell from "@/components/Shell";
+import FieldView from "@/components/FieldView";
+import Dashboard from "@/components/Dashboard";
+import TasksAdmin from "@/components/TasksAdmin";
+import Onboarding from "@/components/Onboarding";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+export const API = `${BACKEND_URL}/api`;
+export const apiClient = axios.create({ baseURL: API });
 
 function App() {
+  const [view, setView] = useState("field"); // field | dashboard | tasks
+  const [role, setRole] = useState(localStorage.getItem("kreteops_role") || "");
+  const [crewName, setCrewName] = useState(localStorage.getItem("kreteops_name") || "");
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // ensure seed exists
+        let r = await apiClient.get("/jobs");
+        if (r.data.length === 0) {
+          await apiClient.post("/seed");
+          r = await apiClient.get("/jobs");
+        }
+        setJob(r.data[0]);
+      } catch (e) {
+        console.error(e);
+      }
+      setLoading(false);
+    };
+    init();
+  }, []);
+
+  const handleOnboarded = (r, n) => {
+    setRole(r);
+    setCrewName(n);
+    localStorage.setItem("kreteops_role", r);
+    localStorage.setItem("kreteops_name", n);
+    setView(r === "manager" ? "dashboard" : "field");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#09090B] text-[#FAFAFA]">
+        <div className="text-2xl font-bold uppercase tracking-tight" style={{ fontFamily: "Barlow Condensed" }}>
+          Loading KreteOps…
+        </div>
+      </div>
+    );
+  }
+
+  if (!role || !crewName) {
+    return <Onboarding onDone={handleOnboarded} />;
+  }
+
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <Shell
+      view={view}
+      onChangeView={setView}
+      role={role}
+      crewName={crewName}
+      job={job}
+      onLogout={() => {
+        localStorage.clear();
+        setRole("");
+        setCrewName("");
+      }}
+    >
+      {view === "field" && <FieldView job={job} crewName={crewName} role={role} />}
+      {view === "dashboard" && <Dashboard job={job} />}
+      {view === "tasks" && <TasksAdmin job={job} role={role} />}
+    </Shell>
   );
 }
 
