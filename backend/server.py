@@ -465,6 +465,34 @@ async def job_dashboard(job_id: str):
     PHOTO_AUDIT_VALUE = 75
     audit_value = photos_captured * PHOTO_AUDIT_VALUE
 
+    # 30-day ROI trend: per-day $ saved + cumulative running total
+    roi_trend = []
+    cumulative = 0
+    for i in range(29, -1, -1):
+        day = today - timedelta(days=i)
+        day_iso = day.isoformat()
+        day_failed = 0
+        day_photos = 0
+        for e in entries:
+            if not e.get("created_at", "").startswith(day_iso):
+                continue
+            for v in e.get("validations", []):
+                if v.get("status") == "fail":
+                    day_failed += 1
+                if v.get("photo_b64"):
+                    day_photos += 1
+        day_saved = day_failed * REWORK_COST_PER_CHECK + day_photos * PHOTO_AUDIT_VALUE
+        cumulative += day_saved
+        roi_trend.append({
+            "date": day_iso,
+            "day_label": day.strftime("%b %d"),
+            "short": day.strftime("%d") if day.day != 1 else day.strftime("%b %d"),
+            "saved": day_saved,
+            "cumulative": cumulative,
+            "checks": day_failed,
+            "photos": day_photos,
+        })
+
     # rework tasks (with names)
     rework_tasks = [
         {"id": t["id"], "name": t["name"], "category": t.get("category"), "course": t.get("course")}
@@ -499,6 +527,7 @@ async def job_dashboard(job_id: str):
             "cost_per_check": REWORK_COST_PER_CHECK,
             "photo_audit_value": PHOTO_AUDIT_VALUE,
             "checks_caught": failed_validations,
+            "trend_30d": roi_trend,
         },
         "rework_tasks": rework_tasks,
         "active_crew": list({e.get("crew_member") for e in entries if e.get("crew_member")}),

@@ -1,6 +1,6 @@
 import React from "react";
 import { apiClient } from "@/App";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from "recharts";
+import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users, ShieldCheck, DollarSign } from "lucide-react";
 
 export default function Dashboard({ job }) {
@@ -46,7 +46,7 @@ export default function Dashboard({ job }) {
       <div data-testid="rework-cost-saver" className="k-surface relative overflow-hidden">
         {/* accent stripe */}
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#CCFF00]" />
-        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#CCFF00]/5 blur-2xl" />
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#CCFF00]/5 blur-2xl pointer-events-none" />
         <div className="p-5 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-5 items-center relative">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-1">
@@ -67,6 +67,42 @@ export default function Dashboard({ job }) {
             <RoiChip testid="roi-saved" label="Saved" value={`$${((roi?.rework_dollars_saved || 0) / 1000).toFixed(1)}k`} icon={<DollarSign className="w-3 h-3" />} tone="text-[#CCFF00]" />
           </div>
         </div>
+
+        {/* 30-day trend */}
+        {roi?.trend_30d?.length > 0 && (
+          <div data-testid="roi-trend-30d" className="border-t border-[#27272A] p-4 md:p-5">
+            <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-3.5 h-3.5 text-[#CCFF00]" />
+                <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#A1A1AA]">30-Day Cumulative Value Protected</span>
+              </div>
+              <div className="text-xs font-mono text-[#A1A1AA]">
+                Last 30 days · <span className="text-[#CCFF00] font-bold">${(roi.trend_30d[roi.trend_30d.length - 1]?.cumulative || 0).toLocaleString()}</span> running total
+              </div>
+            </div>
+            <div className="h-32 md:h-36 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minHeight={120}>
+                <AreaChart data={roi.trend_30d} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="roiGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#CCFF00" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#CCFF00" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272A" vertical={false} />
+                  <XAxis dataKey="short" stroke="#71717A" tick={{ fontSize: 10 }} interval={4} />
+                  <YAxis stroke="#71717A" tick={{ fontSize: 10 }} tickFormatter={(v) => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} width={48} />
+                  <Tooltip
+                    contentStyle={{ background: "#18181B", border: "1px solid #3F3F46", borderRadius: 2, fontSize: 12 }}
+                    formatter={(value, name) => [`$${value.toLocaleString()}`, name === "cumulative" ? "Cumulative Saved" : "Daily Saved"]}
+                    labelFormatter={(label, payload) => payload?.[0]?.payload?.day_label || label}
+                  />
+                  <Area type="monotone" dataKey="cumulative" stroke="#CCFF00" strokeWidth={2.5} fill="url(#roiGrad)" name="cumulative" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Hero metrics */}
