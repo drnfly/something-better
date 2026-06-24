@@ -7,6 +7,7 @@ export default function Shell({ view, onChangeView, role, crewName, job, onLogou
         { id: "dashboard", label: "Command" },
         { id: "tasks", label: "Tasks · AI Rules" },
         { id: "field", label: "Field View" },
+        { id: "admin", label: "Admin" },
       ]
     : [
         { id: "field", label: "Field" },
@@ -20,7 +21,7 @@ export default function Shell({ view, onChangeView, role, crewName, job, onLogou
       <header className="border-b border-[#3F3F46] bg-[#09090B]/95 backdrop-blur sticky top-0 z-30">
         <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-baseline gap-3">
-            <div className="font-display font-black text-2xl uppercase text-[#FF5F15]">KreteOps</div>
+            <div className="font-display font-black text-2xl uppercase text-[#FF5F15]">PLUMBLINE</div>
             <div className="hidden md:block text-[10px] font-mono tracking-widest text-[#A1A1AA]">FIELD-OPS · v1</div>
           </div>
           <div className="flex items-center gap-3">

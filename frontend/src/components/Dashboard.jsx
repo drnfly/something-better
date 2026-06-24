@@ -1,7 +1,7 @@
 import React from "react";
 import { apiClient } from "@/App";
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users, ShieldCheck, DollarSign } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users, ShieldCheck, DollarSign, Trophy, Medal } from "lucide-react";
 
 export default function Dashboard({ job }) {
   const [data, setData] = React.useState(null);
@@ -22,7 +22,7 @@ export default function Dashboard({ job }) {
     return <div className="text-[#A1A1AA] text-sm">Loading dashboard…</div>;
   }
 
-  const { totals, status_counts, daily_trend, validation_stats, category_breakdown, rework_tasks, active_crew, roi } = data;
+  const { totals, status_counts, daily_trend, validation_stats, category_breakdown, rework_tasks, active_crew, roi, leaderboard } = data;
 
   const ratio = totals.ratio;
   const ratioTone = ratio >= 1 ? "text-[#CCFF00]" : ratio >= 0.85 ? "text-[#F59E0B]" : "text-[#FF5F15]";
@@ -180,6 +180,49 @@ export default function Dashboard({ job }) {
                 <Bar dataKey="actual" fill="#FF5F15" name="Actual" />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Foreman Leaderboard */}
+      {leaderboard && leaderboard.length > 0 && (
+        <div data-testid="leaderboard" className="k-surface p-5">
+          <SectionTitle><Trophy className="inline w-4 h-4 text-[#CCFF00]" /> Foreman Leaderboard · Validation Score</SectionTitle>
+          <div className="mt-4 space-y-2">
+            {leaderboard.slice(0, 8).map((p, idx) => {
+              const medal = idx === 0 ? "text-[#CCFF00]" : idx === 1 ? "text-[#A1A1AA]" : idx === 2 ? "text-[#FF5F15]" : "text-[#52525B]";
+              const passColor = p.pass_rate >= 0.95 ? "text-[#CCFF00]" : p.pass_rate >= 0.8 ? "text-[#F59E0B]" : "text-[#FF5F15]";
+              return (
+                <div key={p.name} data-testid={`lb-row-${idx}`} className="k-surface-2 p-3 flex items-center gap-4">
+                  <div className={`font-display font-black text-3xl w-10 text-center ${medal}`}>{idx + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-display font-bold uppercase text-base md:text-lg">{p.name}</span>
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA]">{p.role}</span>
+                      {idx === 0 && <Medal className="w-4 h-4 text-[#CCFF00]" />}
+                    </div>
+                    <div className="text-xs text-[#A1A1AA] font-mono mt-0.5">
+                      {p.hours}h · {p.entries} entries · {p.checks_total} checks
+                    </div>
+                  </div>
+                  <div className="text-right hidden sm:block">
+                    <div className="text-[10px] uppercase tracking-widest text-[#A1A1AA]">Pass Rate</div>
+                    <div className={`font-display font-black text-2xl ${passColor}`}>{Math.round(p.pass_rate * 100)}%</div>
+                  </div>
+                  <div className="text-right hidden md:block">
+                    <div className="text-[10px] uppercase tracking-widest text-[#A1A1AA]">Catches</div>
+                    <div className="font-display font-black text-2xl text-[#FF5F15]">{p.checks_failed}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-widest text-[#A1A1AA]">Score</div>
+                    <div className="font-display font-black text-2xl text-[#FAFAFA]">{p.score}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-[#71717A] mt-3 font-mono leading-snug">
+            Score = pass-rate × 100 + ln(catches+1) × 12 + ln(photos+1) × 6 — rewards both clean work AND catching defects in the field.
           </div>
         </div>
       )}

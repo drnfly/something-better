@@ -28,7 +28,7 @@ db = client[os.environ["DB_NAME"]]
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 
-app = FastAPI(title="KreteOps API")
+app = FastAPI(title="PLUMBLINE API")
 api_router = APIRouter(prefix="/api")
 
 
@@ -154,6 +154,68 @@ class FixSuggestionRequest(BaseModel):
     notes: str = ""
 
 
+# ── ADMIN MODELS ───────────────────────────────────────────────────
+class Settings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = "global"
+    rework_cost_per_check: float = 850.0
+    photo_audit_value: float = 75.0
+    ai_model: str = "claude-sonnet-4-6"
+    company_name: str = "Titan ICF"
+    updated_at: str = Field(default_factory=now_iso)
+
+
+class SettingsUpdate(BaseModel):
+    rework_cost_per_check: Optional[float] = None
+    photo_audit_value: Optional[float] = None
+    ai_model: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+class JobUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    client: Optional[str] = None
+    status: Optional[Literal["planning", "active", "complete", "paused"]] = None
+    budget_hours: Optional[float] = None
+    cover_image: Optional[str] = None
+
+
+class TaskCreate(BaseModel):
+    name: str
+    category: str
+    course: str = "all"
+    unit: Optional[str] = None
+    estimated_hours: Optional[float] = None
+    estimated_qty: Optional[float] = None
+
+
+class TaskUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    course: Optional[str] = None
+    unit: Optional[str] = None
+    estimated_hours: Optional[float] = None
+    estimated_qty: Optional[float] = None
+    status: Optional[Literal["not_started", "in_progress", "validated", "rework"]] = None
+
+
+class CommonMistakeCreate(BaseModel):
+    title: str
+    fix: str
+    category: Optional[str] = None
+    task_id: Optional[str] = None
+
+
+async def get_settings() -> Settings:
+    doc = await db.settings.find_one({"id": "global"}, {"_id": 0})
+    if not doc:
+        s = Settings()
+        await db.settings.insert_one(s.model_dump())
+        return s
+    return Settings(**doc)
+
+
 # ── LLM HELPERS ────────────────────────────────────────────────────
 async def llm_chat(system: str, user: str, session_id: str) -> str:
     chat = LlmChat(
@@ -168,7 +230,7 @@ async def llm_chat(system: str, user: str, session_id: str) -> str:
 # ── ROUTES ─────────────────────────────────────────────────────────
 @api_router.get("/")
 async def root():
-    return {"app": "KreteOps", "status": "online"}
+    return {"app": "PLUMBLINE", "status": "online"}
 
 
 # ── JOBS ───────────────────────────────────────────────────────────
@@ -193,6 +255,32 @@ async def create_job(payload: JobCreate):
     return job
 
 
+@api_router.patch("/jobs/{job_id}", response_model=Job)
+async def update_job(job_id: str, payload: JobUpdate):
+    update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(400, "No fields")
+    result = await db.jobs.find_one_and_update(
+        {"id": job_id}, {"$set": update}, return_document=True, projection={"_id": 0}
+    )
+    if not result:
+        raise HTTPException(404, "Job not found")
+    return Job(**result)
+
+
+@api_router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str):
+    await db.jobs.delete_one({"id": job_id})
+    # cascade
+    tasks = await db.tasks.find({"job_id": job_id}, {"id": 1, "_id": 0}).to_list(5000)
+    task_ids = [t["id"] for t in tasks]
+    await db.tasks.delete_many({"job_id": job_id})
+    if task_ids:
+        await db.validation_steps.delete_many({"task_id": {"$in": task_ids}})
+    await db.task_entries.delete_many({"job_id": job_id})
+    return {"ok": True}
+
+
 # ── TASKS ──────────────────────────────────────────────────────────
 @api_router.get("/jobs/{job_id}/tasks", response_model=List[Task])
 async def list_tasks(job_id: str):
@@ -206,6 +294,82 @@ async def get_task(task_id: str):
     if not doc:
         raise HTTPException(404, "Task not found")
     return Task(**doc)
+
+
+@api_router.post("/jobs/{job_id}/tasks", response_model=Task)
+async def create_task(job_id: str, payload: TaskCreate):
+    if not await db.jobs.find_one({"id": job_id}, {"_id": 0}):
+        raise HTTPException(404, "Job not found")
+    last = await db.tasks.count_documents({"job_id": job_id})
+    task = Task(job_id=job_id, sort_order=last, **payload.model_dump())
+    await db.tasks.insert_one(task.model_dump())
+    return task
+
+
+@api_router.patch("/tasks/{task_id}", response_model=Task)
+async def update_task(task_id: str, payload: TaskUpdate):
+    update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(400, "No fields")
+    result = await db.tasks.find_one_and_update(
+        {"id": task_id}, {"$set": update}, return_document=True, projection={"_id": 0}
+    )
+    if not result:
+        raise HTTPException(404, "Task not found")
+    return Task(**result)
+
+
+@api_router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str):
+    await db.tasks.delete_one({"id": task_id})
+    await db.validation_steps.delete_many({"task_id": task_id})
+    await db.task_entries.delete_many({"task_id": task_id})
+    return {"ok": True}
+
+
+# ── SETTINGS ───────────────────────────────────────────────────────
+@api_router.get("/settings", response_model=Settings)
+async def read_settings():
+    return await get_settings()
+
+
+@api_router.patch("/settings", response_model=Settings)
+async def update_settings(payload: SettingsUpdate):
+    update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(400, "No fields")
+    update["updated_at"] = now_iso()
+    await db.settings.update_one({"id": "global"}, {"$set": update}, upsert=True)
+    return await get_settings()
+
+
+# ── COMMON MISTAKES CRUD ───────────────────────────────────────────
+@api_router.post("/common-mistakes", response_model=CommonMistake)
+async def create_common_mistake(payload: CommonMistakeCreate):
+    cm = CommonMistake(**payload.model_dump())
+    await db.common_mistakes.insert_one(cm.model_dump())
+    return cm
+
+
+@api_router.delete("/common-mistakes/{cm_id}")
+async def delete_common_mistake(cm_id: str):
+    await db.common_mistakes.delete_one({"id": cm_id})
+    return {"ok": True}
+
+
+# ── DANGER ZONE ────────────────────────────────────────────────────
+@api_router.post("/admin/reset")
+async def admin_reset(keep_settings: bool = True):
+    """Wipes all jobs, tasks, validation steps, entries, common mistakes. Re-seeds Walls Abilene."""
+    await db.jobs.delete_many({})
+    await db.tasks.delete_many({})
+    await db.validation_steps.delete_many({})
+    await db.task_entries.delete_many({})
+    await db.common_mistakes.delete_many({})
+    if not keep_settings:
+        await db.settings.delete_many({})
+    # re-seed
+    return await seed_demo(force=True)
 
 
 # ── VALIDATION STEPS ───────────────────────────────────────────────
@@ -458,11 +622,11 @@ async def job_dashboard(job_id: str):
 
     # Rework Cost Saver: every failed check caught in the field = rework dollars NOT spent later.
     # Industry rule-of-thumb: rework caught at install ≈ $250 avg; same defect caught post-pour ≈ 6–10x.
-    # We use a conservative $850 per field-caught failed check (cost-avoidance).
-    REWORK_COST_PER_CHECK = 850
+    settings = await get_settings()
+    REWORK_COST_PER_CHECK = settings.rework_cost_per_check
     rework_dollars_saved = failed_validations * REWORK_COST_PER_CHECK
-    # Photos also count as audit-trail value (defensible against disputes), conservative $75/photo
-    PHOTO_AUDIT_VALUE = 75
+    # Photos also count as audit-trail value (defensible against disputes)
+    PHOTO_AUDIT_VALUE = settings.photo_audit_value
     audit_value = photos_captured * PHOTO_AUDIT_VALUE
 
     # 30-day ROI trend: per-day $ saved + cumulative running total
@@ -499,6 +663,37 @@ async def job_dashboard(job_id: str):
         for t in tasks if t.get("status") == "rework"
     ][:10]
 
+    # Foreman / Crew Leaderboard
+    import math
+    crew_stats = {}
+    for e in entries:
+        name = e.get("crew_member") or "Unknown"
+        if name not in crew_stats:
+            crew_stats[name] = {
+                "name": name, "role": e.get("role", "Installer"),
+                "hours": 0.0, "qty": 0.0, "entries": 0,
+                "checks_total": 0, "checks_passed": 0, "checks_failed": 0, "photos": 0,
+            }
+        cs = crew_stats[name]
+        cs["hours"] += e.get("hours", 0)
+        cs["qty"] += e.get("qty_completed", 0)
+        cs["entries"] += 1
+        for v in e.get("validations", []):
+            cs["checks_total"] += 1
+            if v.get("status") == "pass":
+                cs["checks_passed"] += 1
+            elif v.get("status") == "fail":
+                cs["checks_failed"] += 1
+            if v.get("photo_b64"):
+                cs["photos"] += 1
+    leaderboard = []
+    for cs in crew_stats.values():
+        pr = cs["checks_passed"] / cs["checks_total"] if cs["checks_total"] else 0
+        score = pr * 100 + math.log(cs["checks_failed"] + 1) * 12 + math.log(cs["photos"] + 1) * 6
+        leaderboard.append({**cs, "pass_rate": round(pr, 2), "score": round(score, 1),
+                            "hours": round(cs["hours"], 1), "qty": round(cs["qty"], 1)})
+    leaderboard.sort(key=lambda x: x["score"], reverse=True)
+
     return {
         "job": job_doc,
         "totals": {
@@ -531,6 +726,7 @@ async def job_dashboard(job_id: str):
         },
         "rework_tasks": rework_tasks,
         "active_crew": list({e.get("crew_member") for e in entries if e.get("crew_member")}),
+        "leaderboard": leaderboard,
     }
 
 

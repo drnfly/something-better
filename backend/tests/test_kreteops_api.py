@@ -19,7 +19,7 @@ def test_root():
     r = session.get(f"{API}/")
     assert r.status_code == 200
     body = r.json()
-    assert body == {"app": "KreteOps", "status": "online"}
+    assert body == {"app": "PLUMBLINE", "status": "online"}
 
 
 # ── seed idempotency ──

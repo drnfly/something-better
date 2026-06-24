@@ -5,6 +5,7 @@ import Shell from "@/components/Shell";
 import FieldView from "@/components/FieldView";
 import Dashboard from "@/components/Dashboard";
 import TasksAdmin from "@/components/TasksAdmin";
+import SuperAdmin from "@/components/SuperAdmin";
 import Onboarding from "@/components/Onboarding";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -12,9 +13,9 @@ export const API = `${BACKEND_URL}/api`;
 export const apiClient = axios.create({ baseURL: API });
 
 function App() {
-  const [view, setView] = useState("field"); // field | dashboard | tasks
   const [role, setRole] = useState(localStorage.getItem("kreteops_role") || "");
   const [crewName, setCrewName] = useState(localStorage.getItem("kreteops_name") || "");
+  const [view, setView] = useState(role === "manager" ? "dashboard" : "field"); // field | dashboard | tasks | admin
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +49,7 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090B] text-[#FAFAFA]">
         <div className="text-2xl font-bold uppercase tracking-tight" style={{ fontFamily: "Barlow Condensed" }}>
-          Loading KreteOps…
+          Loading PLUMBLINE…
         </div>
       </div>
     );
@@ -74,6 +75,21 @@ function App() {
       {view === "field" && <FieldView job={job} crewName={crewName} role={role} />}
       {view === "dashboard" && <Dashboard job={job} />}
       {view === "tasks" && <TasksAdmin job={job} role={role} />}
+      {view === "admin" && role === "manager" && (
+        <SuperAdmin
+          job={job}
+          onJobChanged={async () => {
+            const r = await apiClient.get("/jobs");
+            if (r.data.length === 0) {
+              await apiClient.post("/seed");
+              const r2 = await apiClient.get("/jobs");
+              setJob(r2.data[0]);
+            } else {
+              setJob(r.data[0]);
+            }
+          }}
+        />
+      )}
     </Shell>
   );
 }

@@ -16,16 +16,16 @@ export default function Onboarding({ onDone }) {
         {/* Header */}
         <div className="mb-12">
           <div className="flex items-baseline gap-3 mb-3">
-            <div className="text-[#FF5F15] font-display font-black text-5xl md:text-6xl uppercase">KreteOps</div>
+            <div className="text-[#FF5F15] font-display font-black text-5xl md:text-6xl uppercase">PLUMBLINE</div>
             <div className="text-[#A1A1AA] text-xs font-mono tracking-widest">v1.0 · FIELD-OPS</div>
           </div>
           <div className="text-[#FAFAFA] font-display text-xl md:text-2xl uppercase tracking-tight leading-tight">
-            Validation-driven ICF field<br/>
-            <span className="text-[#CCFF00]">management. zero rework.</span>
+            Build to the<br/>
+            <span className="text-[#CCFF00]">plumbline. Zero rework.</span>
           </div>
           <div className="text-[#A1A1AA] mt-4 max-w-lg leading-relaxed">
-            The safety net is built into the process. Crew validates as they go.
-            Manager sees live truth — no chasing required.
+            The 4,000-year-old standard of accuracy — now baked into your jobsite.
+            Crew validates as they go. Manager sees live truth.
           </div>
         </div>
 
