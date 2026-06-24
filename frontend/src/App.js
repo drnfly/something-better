@@ -22,13 +22,14 @@ function App() {
   useEffect(() => {
     const init = async () => {
       try {
-        // ensure seed exists
         let r = await apiClient.get("/jobs");
         if (r.data.length === 0) {
           await apiClient.post("/seed");
           r = await apiClient.get("/jobs");
         }
-        setJob(r.data[0]);
+        const savedId = localStorage.getItem("plumbline_job_id");
+        const found = savedId ? r.data.find((j) => j.id === savedId) : null;
+        setJob(found || r.data[0]);
       } catch (e) {
         console.error(e);
       }
@@ -36,6 +37,11 @@ function App() {
     };
     init();
   }, []);
+
+  const changeJob = (j) => {
+    setJob(j);
+    localStorage.setItem("plumbline_job_id", j.id);
+  };
 
   const handleOnboarded = (r, n) => {
     setRole(r);
@@ -66,6 +72,7 @@ function App() {
       role={role}
       crewName={crewName}
       job={job}
+      onJobChange={changeJob}
       onLogout={() => {
         localStorage.clear();
         setRole("");

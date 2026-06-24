@@ -1,6 +1,6 @@
-"""KreteOps — ICF Validation-Driven Field Management System Backend."""
+"""PLUMBLINE — ICF Validation-Driven Field Management System Backend."""
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,6 +9,7 @@ import logging
 import base64
 import json
 import uuid
+import io
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Literal
@@ -17,6 +18,7 @@ from datetime import datetime, timezone, timedelta
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 from seed_tasks import TASK_TEMPLATES, DEFAULT_VALIDATION_STEPS, COMMON_MISTAKES
+from exports import build_recap_xlsx, build_recap_pdf, parse_xlsx_for_import
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -800,6 +802,235 @@ async def seed_demo(force: bool = False):
         "tasks": created_tasks,
         "validation_steps": created_steps,
     }
+
+
+# ── CREW DRILLDOWN ─────────────────────────────────────────────────
+@api_router.get("/jobs/{job_id}/crew/{name}/stats")
+async def crew_drilldown(job_id: str, name: str):
+    """Per-crew member breakdown for a single job."""
+    entries = await db.task_entries.find(
+        {"job_id": job_id, "crew_member": name}, {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    if not entries:
+        return {"name": name, "found": False, "entries": [], "stats": {}, "daily": [], "task_breakdown": []}
+
+    tasks = await db.tasks.find({"job_id": job_id}, {"_id": 0}).to_list(2000)
+    task_map = {t["id"]: t for t in tasks}
+
+    total_hours = sum(e.get("hours", 0) for e in entries)
+    total_qty = sum(e.get("qty_completed", 0) for e in entries)
+    checks_total = checks_passed = checks_failed = photos = 0
+    for e in entries:
+        for v in e.get("validations", []):
+            checks_total += 1
+            if v.get("status") == "pass":
+                checks_passed += 1
+            elif v.get("status") == "fail":
+                checks_failed += 1
+            if v.get("photo_b64"):
+                photos += 1
+
+    # daily for last 14 days
+    today = datetime.now(timezone.utc).date()
+    daily = []
+    for i in range(13, -1, -1):
+        day = today - timedelta(days=i)
+        day_entries = [e for e in entries if e.get("created_at", "").startswith(day.isoformat())]
+        daily.append({
+            "date": day.isoformat(),
+            "day_label": day.strftime("%a"),
+            "short": day.strftime("%b %d"),
+            "hours": round(sum(e.get("hours", 0) for e in day_entries), 1),
+            "qty": round(sum(e.get("qty_completed", 0) for e in day_entries), 1),
+            "entries": len(day_entries),
+            "failed_checks": sum(1 for e in day_entries if e.get("has_failed_check")),
+        })
+
+    # task breakdown — top tasks by hours spent
+    task_agg = {}
+    for e in entries:
+        tid = e.get("task_id")
+        if tid not in task_agg:
+            t = task_map.get(tid, {})
+            task_agg[tid] = {"task_id": tid, "name": t.get("name", "?"), "category": t.get("category", "?"),
+                              "course": t.get("course", "all"), "hours": 0, "qty": 0, "entries": 0}
+        task_agg[tid]["hours"] += e.get("hours", 0)
+        task_agg[tid]["qty"] += e.get("qty_completed", 0)
+        task_agg[tid]["entries"] += 1
+    task_breakdown = sorted(task_agg.values(), key=lambda x: x["hours"], reverse=True)
+    for t in task_breakdown:
+        t["hours"] = round(t["hours"], 1)
+        t["qty"] = round(t["qty"], 1)
+
+    # recent entries (last 25, with task names)
+    recent = []
+    for e in entries[:25]:
+        t = task_map.get(e.get("task_id"), {})
+        recent.append({
+            "id": e.get("id"),
+            "task_name": t.get("name", "?"),
+            "category": t.get("category", "?"),
+            "hours": e.get("hours", 0),
+            "qty_completed": e.get("qty_completed", 0),
+            "role": e.get("role"),
+            "has_failed_check": e.get("has_failed_check"),
+            "validations_count": len(e.get("validations", [])),
+            "photos_count": sum(1 for v in e.get("validations", []) if v.get("photo_b64")),
+            "created_at": e.get("created_at"),
+            "notes": e.get("notes", ""),
+        })
+
+    pass_rate = checks_passed / checks_total if checks_total else 0
+    return {
+        "name": name,
+        "found": True,
+        "role": entries[0].get("role") if entries else None,
+        "stats": {
+            "total_hours": round(total_hours, 1),
+            "total_qty": round(total_qty, 1),
+            "entries": len(entries),
+            "checks_total": checks_total,
+            "checks_passed": checks_passed,
+            "checks_failed": checks_failed,
+            "photos": photos,
+            "pass_rate": round(pass_rate, 2),
+        },
+        "daily": daily,
+        "task_breakdown": task_breakdown[:15],
+        "recent": recent,
+    }
+
+
+# ── EXPORTS ────────────────────────────────────────────────────────
+async def _gather_job_data(job_id: str):
+    job_doc = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job_doc:
+        raise HTTPException(404, "Job not found")
+    tasks = await db.tasks.find({"job_id": job_id}, {"_id": 0}).sort("sort_order", 1).to_list(5000)
+    entries = await db.task_entries.find({"job_id": job_id}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    dashboard = await job_dashboard(job_id)
+    return job_doc, tasks, entries, dashboard
+
+
+@api_router.get("/jobs/{job_id}/export/xlsx")
+async def export_xlsx(job_id: str):
+    job, tasks, entries, dashboard = await _gather_job_data(job_id)
+    data = build_recap_xlsx(job, tasks, entries, dashboard)
+    fname = f"PLUMBLINE-{job['name'].replace(' ', '_')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@api_router.get("/jobs/{job_id}/export/pdf")
+async def export_pdf(job_id: str):
+    job, tasks, entries, dashboard = await _gather_job_data(job_id)
+    data = build_recap_pdf(job, tasks, entries, dashboard)
+    fname = f"PLUMBLINE-{job['name'].replace(' ', '_')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+# ── EXCEL IMPORT (AI-assisted) ─────────────────────────────────────
+class ImportXlsxRequest(BaseModel):
+    name: str
+    location: str = ""
+    client: str = ""
+
+
+@api_router.post("/admin/import-xlsx")
+async def import_xlsx(
+    name: str,
+    file: UploadFile = File(...),
+    location: str = "",
+    client: str = "",
+):
+    """Parse an uploaded xlsx, ask Claude to map rows -> PLUMBLINE task schema,
+    then create a new Job + Tasks + default validation steps.
+    """
+    content = await file.read()
+    try:
+        rows = parse_xlsx_for_import(content, max_rows=350)
+    except Exception as e:
+        raise HTTPException(400, f"Could not parse xlsx: {e}")
+    if not rows:
+        raise HTTPException(400, "No data rows found in spreadsheet")
+
+    # Build a compact prompt — send rows in chunks of 60 to keep token usage reasonable
+    CHUNK = 60
+    all_mapped = []
+    for chunk_start in range(0, len(rows), CHUNK):
+        chunk = rows[chunk_start : chunk_start + CHUNK]
+        # serialize each row as: "row N (sheet): col1=val1; col2=val2"
+        rows_text = "\n".join(
+            f"row {r['row']} ({r['sheet']}): "
+            + "; ".join(f"{k}={str(v)[:80]}" for k, v in r["columns"].items())
+            for r in chunk
+        )
+        system_msg = (
+            "You are mapping rows from an ICF construction production spreadsheet to a normalized task schema. "
+            "Allowed categories: Precon, Startup, Layout, Install, Rebar, Pour, Strip, Cleanup, Other. "
+            "Allowed courses: all, 1st, 2nd, 3rd, 4th, 5th. "
+            "Allowed units: LF, SF, EA, HRS, %, null. "
+            "Skip rows that are headers, totals, footers, employee names, or metadata (not actual construction tasks). "
+            "Output ONLY valid JSON: {\"tasks\":[{\"name\":\"...\",\"category\":\"...\",\"course\":\"...\","
+            "\"unit\":\"LF|SF|EA|HRS|%|null\",\"estimated_hours\":number_or_null,\"estimated_qty\":number_or_null}]}"
+        )
+        user_msg = f"Map these rows to tasks:\n\n{rows_text}"
+        try:
+            raw = await llm_chat(system_msg, user_msg, f"import-{uuid.uuid4()}")
+            start, end = raw.find("{"), raw.rfind("}")
+            if start == -1 or end == -1:
+                continue
+            parsed = json.loads(raw[start : end + 1])
+            all_mapped.extend(parsed.get("tasks", []))
+        except Exception as e:
+            logging.exception(f"chunk {chunk_start} failed: {e}")
+
+    if not all_mapped:
+        raise HTTPException(500, "AI could not map any rows to tasks")
+
+    # Create job + tasks
+    job = Job(name=name, location=location, client=client, status="active")
+    await db.jobs.insert_one(job.model_dump())
+
+    created_tasks = 0
+    for i, t in enumerate(all_mapped):
+        unit = t.get("unit")
+        if unit in (None, "null", "None", ""):
+            unit = None
+        category = t.get("category", "Other")
+        if category not in ["Precon", "Startup", "Layout", "Install", "Rebar", "Pour", "Strip", "Cleanup", "Other"]:
+            category = "Other"
+        course = t.get("course", "all")
+        if course not in ["all", "1st", "2nd", "3rd", "4th", "5th"]:
+            course = "all"
+        task = Task(
+            job_id=job.id,
+            name=(t.get("name") or "Unnamed task")[:200],
+            category=category,
+            course=course,
+            unit=unit,
+            estimated_hours=t.get("estimated_hours") if isinstance(t.get("estimated_hours"), (int, float)) else None,
+            estimated_qty=t.get("estimated_qty") if isinstance(t.get("estimated_qty"), (int, float)) else None,
+            sort_order=i,
+        )
+        await db.tasks.insert_one(task.model_dump())
+        created_tasks += 1
+        # default validation steps from category
+        for j, (desc, requires_photo) in enumerate(DEFAULT_VALIDATION_STEPS.get(category, [])):
+            step = ValidationStep(
+                task_id=task.id, description=desc, requires_photo=requires_photo,
+                source="default", approved=True, order=j,
+            )
+            await db.validation_steps.insert_one(step.model_dump())
+
+    return {"status": "imported", "job_id": job.id, "tasks": created_tasks, "rows_parsed": len(rows)}
 
 
 # ── REGISTER ───────────────────────────────────────────────────────
