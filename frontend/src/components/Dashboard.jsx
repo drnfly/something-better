@@ -87,8 +87,8 @@ export default function Dashboard({ job }) {
       {/* Daily trend */}
       <div className="k-surface p-5">
         <SectionTitle>7-Day Production Trend</SectionTitle>
-        <div className="h-64 mt-4">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-64 mt-4 min-w-0">
+          <ResponsiveContainer width="100%" height="100%" minHeight={240}>
             <LineChart data={daily_trend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272A" />
               <XAxis dataKey="day_label" stroke="#71717A" />
@@ -106,8 +106,8 @@ export default function Dashboard({ job }) {
       {catData.length > 0 && (
         <div className="k-surface p-5">
           <SectionTitle>Hours by Phase — Est vs Actual</SectionTitle>
-          <div className="h-72 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 mt-4 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minHeight={260}>
               <BarChart data={catData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272A" />
                 <XAxis dataKey="name" stroke="#71717A" />
