@@ -1,0 +1,94 @@
+{
+  "project_name": "KreteOps",
+  "theme_archetype": {
+    "theme": "DARK",
+    "archetype": "2_performance_pro_industrial",
+    "rationale": "High energy, command-center focus for the manager dashboard combined with 'tactical' high-visibility for outdoor field crews. Dark theme reduces glare outdoors, and high-vis accent colors command attention for safety and critical actions."
+  },
+  "typography": {
+    "primary_heading": {
+      "family": "Barlow Condensed",
+      "weights": ["600", "700", "900"],
+      "usage": "H1, H2, main application titles, statistical numbers, dashboard metrics."
+    },
+    "secondary_body": {
+      "family": "IBM Plex Sans",
+      "weights": ["400", "500", "600"],
+      "usage": "Data tables, task descriptions, UI labels, button text."
+    },
+    "hierarchy_rules": [
+      "H1 (Hero/Main): text-4xl to text-6xl, tracking-tighter, uppercase, font-black",
+      "H2 (Section): text-2xl to text-3xl, tracking-tight, uppercase, font-bold",
+      "Metrics: text-5xl to text-6xl, font-black, Barlow Condensed, text-white",
+      "Body: text-base to text-lg, loose leading for readability in harsh conditions"
+    ]
+  },
+  "color_palette": {
+    "background_base": "#09090B",
+    "surface_primary": "#18181B",
+    "surface_secondary": "#27272A",
+    "accent_primary": "#FF5F15",
+    "accent_secondary": "#CCFF00",
+    "text_primary": "#FAFAFA",
+    "text_secondary": "#A1A1AA",
+    "border_default": "#3F3F46",
+    "status": {
+      "success": "#CCFF00",
+      "warning": "#F59E0B",
+      "danger": "#FF5F15",
+      "in_progress": "#3B82F6",
+      "validated": "#CCFF00",
+      "rework": "#FF5F15"
+    }
+  },
+  "layout_and_spacing": {
+    "mobile_field_app": [
+      "Generous spacing: p-6 or p-8 for task containers.",
+      "Glove-friendly touch targets: min-h-[64px] (h-16) or h-20 for all interactive elements, buttons, checkboxes, and inputs.",
+      "Cardless flat lists with 1px border dividers to maximize screen real estate and reduce clutter."
+    ],
+    "manager_dashboard": [
+      "Bento Grid / Command Center: Dense, tight gap (gap-4 or gap-6).",
+      "Grid columns: grid-cols-1 md:grid-cols-3 lg:grid-cols-4 or 12-col layout.",
+      "Every pixel utilized: h-full on children to stretch to match neighbors."
+    ]
+  },
+  "component_strategies": {
+    "buttons": "Large, blocky, 0px or 2px max border radius (sharp/rugged). Primary CTA in Safety Orange (#FF5F15) with black text.",
+    "validation_checkbox": "Oversized square checkbox (h-8 w-8 or h-10 w-10) with thick 2px borders. When checked, fill with Hi-Vis Yellow (#CCFF00) and black checkmark.",
+    "photo_capture": "Full-width dashed border container (min-h-[120px] or h-32) with central camera icon, encouraging users to tap to snap proof.",
+    "surfaces": "No soft shadows. Use 1px solid borders (border-zinc-800) for separation. Active states use 2px inner border of Accent color. Backgrounds are strictly solid, no glassmorphism for industrial apps."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Hard color swaps (e.g., bg-zinc-800 to bg-zinc-700), no slow fades. Instant response.",
+    "validation_action": "Snappy scale down/up on tap. 'Validated' items animate a left-border color to Hi-Vis yellow.",
+    "data_testid_rule": "All interactive and key informational elements MUST include a data-testid attribute (e.g., data-testid='validate-task-btn')."
+  },
+  "media": {
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/176342/pexels-photo-176342.jpeg",
+        "category": "hero_background",
+        "description": "Silhouette of workers on a construction site against sunset sky. Use with bg-black/70 overlay for login/onboarding."
+      },
+      {
+        "url": "https://images.pexels.com/photos/7108785/pexels-photo-7108785.jpeg",
+        "category": "project_thumbnail",
+        "description": "Modern concrete building under construction. Use as project cover image for Walls Abilene Intermediate SS."
+      }
+    ]
+  },
+  "specific_views": {
+    "real_time_task_entry": "Task list separated by multi-course tracking (2nd floor, 3rd floor). Each task expands into a checklist + photo capture area + labor hour input (Foreman, Installer, Apprentice).",
+    "manager_dashboard": "Live health dashboard. Use Shadcn charts (Recharts) to show Earned vs Spent ratio, weekly trend, variance by task. Use high-contrast data visualization."
+  },
+  "instructions_to_main_agent": [
+    "Install specific fonts via Google Fonts: Barlow Condensed (600, 700, 900) and IBM Plex Sans (400, 500, 600, 700).",
+    "Use lucide-react for icons. Opt for heavy, bold icon weights where possible.",
+    "Do NOT use HTML <input type='date'> or <select>. Use Shadcn UI dropdowns and select, heavily customized to look rugged (remove soft border radii).",
+    "Implement 'Validation Layer': A task cannot be marked 'Complete' until all sub-checklist items and the Photo Capture requirement are met.",
+    "Use data-testid on all interactive elements (buttons, inputs, tabs).",
+    "Force dark mode across the entire app by appending 'dark' class to html/body or a root wrapper.",
+    "No auth required. User selects a role (Field Crew or Manager) on load to determine view."
+  ]
+}
