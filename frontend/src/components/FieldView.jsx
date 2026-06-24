@@ -248,10 +248,10 @@ function TaskSheet({ task, crewName, role, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-start md:items-center justify-center p-0 md:p-4 overflow-y-auto">
-      <div className="bg-[#09090B] border-2 border-[#3F3F46] w-full max-w-3xl my-0 md:my-8 k-slide-up">
+    <div className="fixed inset-0 z-50 bg-black/80 flex justify-center p-0 md:p-4">
+      <div className="bg-[#09090B] border-2 border-[#3F3F46] w-full max-w-3xl flex flex-col h-full md:max-h-[92vh] md:h-auto k-slide-up">
         {/* Header */}
-        <div className="border-b border-[#3F3F46] p-5 flex items-start justify-between gap-4 sticky top-0 bg-[#09090B] z-10">
+        <div className="border-b border-[#3F3F46] p-5 flex items-start justify-between gap-4 bg-[#09090B] flex-shrink-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className={`k-pill k-pill-${task.status}`}>{STATUS_LABEL[task.status]}</span>
@@ -269,7 +269,7 @@ function TaskSheet({ task, crewName, role, onClose, onSaved }) {
           <button data-testid="close-task-sheet" onClick={onClose} className="k-btn p-3"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="p-5 space-y-6">
+        <div className="p-5 space-y-6 overflow-y-auto flex-1 min-h-0">
           {/* Production entry */}
           <section>
             <h3 className="font-display font-bold uppercase tracking-tight text-lg mb-3 text-[#CCFF00]">1 · Log Production</h3>
@@ -415,17 +415,9 @@ function TaskSheet({ task, crewName, role, onClose, onSaved }) {
           </section>
 
           {/* Submit */}
-          <div className="sticky bottom-0 bg-[#09090B] pt-4 -mx-5 px-5 pb-2 border-t border-[#3F3F46]">
-            <button
-              data-testid="submit-entry-btn"
-              onClick={submit}
-              disabled={saving}
-              className="k-btn k-btn-primary k-btn-lg w-full"
-            >
-              {saving ? "Saving…" : allRequiredOK ? "Submit & Validate ✓" : "Submit (Partial)"}
-            </button>
+          <div className="pt-2">
             <div className="text-[10px] text-center text-[#A1A1AA] mt-2 uppercase tracking-widest">
-              {allRequiredOK ? "All required checks complete" : "Not all required checks complete — entry will be saved as in-progress"}
+              {allRequiredOK ? "All required checks complete" : "Some required checks not complete — entry will save as in-progress"}
             </div>
           </div>
 
@@ -449,6 +441,18 @@ function TaskSheet({ task, crewName, role, onClose, onSaved }) {
               </div>
             </section>
           )}
+        </div>
+
+        {/* Sticky footer with submit */}
+        <div className="border-t border-[#3F3F46] p-4 bg-[#09090B] flex-shrink-0">
+          <button
+            data-testid="submit-entry-btn"
+            onClick={submit}
+            disabled={saving}
+            className="k-btn k-btn-primary k-btn-lg w-full"
+          >
+            {saving ? "Saving…" : allRequiredOK ? "Submit & Validate ✓" : "Submit (Partial)"}
+          </button>
         </div>
       </div>
     </div>

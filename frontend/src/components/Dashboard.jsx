@@ -1,7 +1,7 @@
 import React from "react";
 import { apiClient } from "@/App";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users, ShieldCheck, DollarSign } from "lucide-react";
 
 export default function Dashboard({ job }) {
   const [data, setData] = React.useState(null);
@@ -22,7 +22,7 @@ export default function Dashboard({ job }) {
     return <div className="text-[#A1A1AA] text-sm">Loading dashboard…</div>;
   }
 
-  const { totals, status_counts, daily_trend, validation_stats, category_breakdown, rework_tasks, active_crew } = data;
+  const { totals, status_counts, daily_trend, validation_stats, category_breakdown, rework_tasks, active_crew, roi } = data;
 
   const ratio = totals.ratio;
   const ratioTone = ratio >= 1 ? "text-[#CCFF00]" : ratio >= 0.85 ? "text-[#F59E0B]" : "text-[#FF5F15]";
@@ -42,6 +42,33 @@ export default function Dashboard({ job }) {
 
   return (
     <div data-testid="dashboard-view" className="space-y-6">
+      {/* Rework Cost Saver — the ROI story */}
+      <div data-testid="rework-cost-saver" className="k-surface relative overflow-hidden">
+        {/* accent stripe */}
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#CCFF00]" />
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-[#CCFF00]/5 blur-2xl" />
+        <div className="p-5 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-5 items-center relative">
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldCheck className="w-4 h-4 text-[#CCFF00]" />
+              <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#CCFF00]">Rework Cost Saver · Validation ROI</span>
+            </div>
+            <div className="font-display font-black text-5xl md:text-7xl leading-none tracking-tighter text-[#FAFAFA]">
+              ${(roi?.total_value_protected || 0).toLocaleString()}
+            </div>
+            <div className="text-sm text-[#A1A1AA] mt-2 max-w-lg leading-snug">
+              Field-caught defects × {`$${roi?.cost_per_check}/check`} avoided + photo audit value.
+              <span className="text-[#CCFF00] font-semibold"> Catching it now is 6–10× cheaper than post-pour.</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 md:gap-2">
+            <RoiChip testid="roi-checks" label="Caught" value={roi?.checks_caught || 0} icon={<AlertTriangle className="w-3 h-3" />} />
+            <RoiChip testid="roi-photos" label="Photos" value={roi?.photos_captured || validation_stats.photos_captured} icon={<Camera className="w-3 h-3" />} />
+            <RoiChip testid="roi-saved" label="Saved" value={`$${((roi?.rework_dollars_saved || 0) / 1000).toFixed(1)}k`} icon={<DollarSign className="w-3 h-3" />} tone="text-[#CCFF00]" />
+          </div>
+        </div>
+      </div>
+
       {/* Hero metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <MetricTile testid="metric-ratio" label="Earned / Spent Ratio" value={ratio.toFixed(2)} unit="" tone={ratioTone} icon={<TrendingUp className="w-4 h-4" />} />
@@ -183,6 +210,15 @@ function MiniStat({ label, value, tone, icon }) {
     <div className="border-l-2 border-[#3F3F46] pl-3">
       <div className="text-[10px] uppercase tracking-widest text-[#A1A1AA] flex items-center gap-1">{icon}{label}</div>
       <div className={`font-display font-black text-3xl mt-0.5 ${tone || ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function RoiChip({ testid, label, value, icon, tone }) {
+  return (
+    <div data-testid={testid} className="k-surface-2 p-3 text-center">
+      <div className="text-[9px] uppercase tracking-widest text-[#A1A1AA] flex items-center justify-center gap-1">{icon}{label}</div>
+      <div className={`font-display font-black text-2xl md:text-3xl mt-0.5 ${tone || "text-[#FAFAFA]"}`}>{value}</div>
     </div>
   );
 }

@@ -456,6 +456,15 @@ async def job_dashboard(job_id: str):
             if v.get("photo_b64"):
                 photos_captured += 1
 
+    # Rework Cost Saver: every failed check caught in the field = rework dollars NOT spent later.
+    # Industry rule-of-thumb: rework caught at install ≈ $250 avg; same defect caught post-pour ≈ 6–10x.
+    # We use a conservative $850 per field-caught failed check (cost-avoidance).
+    REWORK_COST_PER_CHECK = 850
+    rework_dollars_saved = failed_validations * REWORK_COST_PER_CHECK
+    # Photos also count as audit-trail value (defensible against disputes), conservative $75/photo
+    PHOTO_AUDIT_VALUE = 75
+    audit_value = photos_captured * PHOTO_AUDIT_VALUE
+
     # rework tasks (with names)
     rework_tasks = [
         {"id": t["id"], "name": t["name"], "category": t.get("category"), "course": t.get("course")}
@@ -482,6 +491,14 @@ async def job_dashboard(job_id: str):
             "failed": failed_validations,
             "photos_captured": photos_captured,
             "pass_rate": round(passed_validations / total_validations, 2) if total_validations else 0,
+        },
+        "roi": {
+            "rework_dollars_saved": rework_dollars_saved,
+            "audit_value": audit_value,
+            "total_value_protected": rework_dollars_saved + audit_value,
+            "cost_per_check": REWORK_COST_PER_CHECK,
+            "photo_audit_value": PHOTO_AUDIT_VALUE,
+            "checks_caught": failed_validations,
         },
         "rework_tasks": rework_tasks,
         "active_crew": list({e.get("crew_member") for e in entries if e.get("crew_member")}),
