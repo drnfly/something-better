@@ -1,7 +1,9 @@
 import React from "react";
 import { apiClient } from "@/App";
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users, ShieldCheck, DollarSign, Trophy, Medal } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Camera, Activity, TrendingUp, Users, ShieldCheck, DollarSign, Trophy, Medal, FileSpreadsheet, FileText } from "lucide-react";
+import { API } from "@/App";
+import CrewDrilldown from "@/components/CrewDrilldown";
 
 export default function Dashboard({ job }) {
   const [data, setData] = React.useState(null);
